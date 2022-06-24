@@ -66,6 +66,9 @@ use std::str::{self, FromStr};
 use num_bigint::{BigInt, ParseBigIntError, Sign, ToBigInt};
 use num_integer::Integer as IntegerTrait;
 pub use num_traits::{FromPrimitive, Num, One, Signed, ToPrimitive, Zero};
+use serde::ser::SerializeStruct;
+use serde::{Serialize, Deserialize, Deserializer};
+extern crate serde;
 
 const LOG2_10: f64 = 3.321928094887362_f64;
 
@@ -144,11 +147,33 @@ fn get_rounding_term(num: &BigInt) -> u8 {
 
 /// A big decimal type.
 ///
-#[derive(Clone, Eq)]
+#[derive(Clone, Eq, Deserialize)]
 pub struct BigDecimal {
+    #[serde(deserialize_with = "from_str")]
     int_val: BigInt,
     // A positive scale means a negative power of 10
     scale: i64,
+}
+
+fn from_str<'de, D>(deserializer: D) -> Result<BigInt, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s: &str = Deserialize::deserialize(deserializer)?;
+    Ok(BigInt::from_str(s).unwrap())
+}
+
+impl Serialize for BigDecimal {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let str = self.int_val.to_string();
+        let mut s = serializer.serialize_struct("BigDecimal", 2)?;
+        s.serialize_field("int_val", &str)?;
+        s.serialize_field("scale", &self.scale)?;
+        s.end()
+    }
 }
 
 impl BigDecimal {
